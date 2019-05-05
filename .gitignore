@@ -1,0 +1,11 @@
+# ignore PyCharm cruft
+/.idea
+*.iml
+
+# ignore results folder
+/Results
+
+# ignore figures and videos
+*.eps
+*.pdf
+*.mp4
