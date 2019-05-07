@@ -43,7 +43,8 @@ def main():
 
             # Plot results
             if control_plot_results:
-                plot_results(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
+                # plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
+                plot_distribution(ts_rate, temperature)
 
             i += 1
 
@@ -93,8 +94,8 @@ def write_results(temperature, time_series_collector, file_name):
                 f.write("%s" % ", ".join([str(element) for element in line]))
 
 
-def plot_results(final_time, n_agents, ts_n_agents_up, ts_rate, temperature):
-    """Performs basic plotting"""
+def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature):
+    """Performs basic plotting of the time series of n_agents_up and the rate of profit"""
     # Create figure
     plt.figure(figsize=(8, 6), facecolor='white')
     # Plot number of agents up
@@ -111,6 +112,21 @@ def plot_results(final_time, n_agents, ts_n_agents_up, ts_rate, temperature):
     plt.xlim(0.0, final_time)
     plt.ylim(0.0, 2)
     plt.ylabel("Rate of profit")
+    plt.tight_layout()
+    plt.draw()
+
+
+def plot_distribution(ts_rate, temperature):
+    """Performs basic plotting of the distribution of the rate of profit"""
+    # Create figure
+    plt.figure(figsize=(8, 6), facecolor='white')
+    # Plot histogram of the rate of profit
+    my_bins = np.linspace(0.0, 1.0, 101, endpoint=True)
+    plt.hist(ts_rate, bins=my_bins, density=True)
+    plt.xlim(0.0, 1.0)
+    plt.ylabel("Probability density")
+    plt.xlabel("Rate of profit")
+    plt.title("T = " + str(temperature))
     plt.tight_layout()
     plt.draw()
 
