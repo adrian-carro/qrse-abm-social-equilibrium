@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 def main():
     # Control variables
     # temperatures = np.linspace(0.2, 0.3, 41, endpoint=True)  # List of temperatures to simulate
-    temperatures = [0.5]  # List of temperatures to simulate
-    mu = 0.5
-    delta = 0.5
+    temperatures = [0.01]  # List of temperatures to simulate
+    mu = 0.0
     n_agents = 1000
+    delta = 0.01 / n_agents
     final_time = 1000
     n_realizations = 1  # Realizations per temperature value
-    initial_rate = 0.5
+    initial_rate = 0.0
     random_numbers_seed = 1
     control_write_results = False
     control_plot_results = True
@@ -43,8 +43,8 @@ def main():
 
             # Plot results
             if control_plot_results:
-                # plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
-                plot_distribution(ts_rate, temperature)
+                plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
+                # plot_distribution(ts_rate, temperature)
 
             i += 1
 
@@ -63,6 +63,7 @@ def social_interaction_model(temperature, mu, n_agents, final_time, initial_rate
     ts_n_agents_up = []
     ts_rate = []
     t = 0
+    old_n_agents_up = int(n_agents/2)
     while t <= final_time:
         # Update the frequency of buying for a given agent (for now, all agents have the same frequency)
         probability_of_entry = 1/(1 + np.exp((mu - rate) / temperature))
@@ -79,7 +80,8 @@ def social_interaction_model(temperature, mu, n_agents, final_time, initial_rate
         ts_n_agents_up.append(n_agents_up)
         ts_rate.append(rate)
         # Update the rate of profit for next time step
-        rate = rate - delta * (2 * n_agents_up - n_agents) / n_agents
+        rate = rate - delta * (n_agents_up - old_n_agents_up)
+        old_n_agents_up = n_agents_up
         t += 1
     return ts_n_agents_up, ts_rate
 
@@ -97,7 +99,7 @@ def write_results(temperature, time_series_collector, file_name):
 def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature):
     """Performs basic plotting of the time series of n_agents_up and the rate of profit"""
     # Create figure
-    plt.figure(figsize=(8, 6), facecolor='white')
+    plt.figure(figsize=(6, 4.5), facecolor='white')
     # Plot number of agents up
     plt.plot(range(final_time + 1), ts_n_agents_up, "o-b", label="n_agents_up")
     plt.xlim(0.0, final_time)
@@ -110,7 +112,7 @@ def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
     ax1.twinx()  # instantiate a second axes that shares the same x-axis
     plt.plot(range(final_time + 1), ts_rate, "^-r", label="rate")
     plt.xlim(0.0, final_time)
-    plt.ylim(0.0, 2)
+    plt.ylim(-0.02, 0.02)
     plt.ylabel("Rate of profit")
     plt.tight_layout()
     plt.draw()
@@ -121,9 +123,9 @@ def plot_distribution(ts_rate, temperature):
     # Create figure
     plt.figure(figsize=(8, 6), facecolor='white')
     # Plot histogram of the rate of profit
-    my_bins = np.linspace(0.0, 1.0, 101, endpoint=True)
+    my_bins = np.linspace(-0.1, 0.1, 101, endpoint=True)
     plt.hist(ts_rate, bins=my_bins, density=True)
-    plt.xlim(0.0, 1.0)
+    plt.xlim(-0.1, 0.1)
     plt.ylabel("Probability density")
     plt.xlabel("Rate of profit")
     plt.title("T = " + str(temperature))
