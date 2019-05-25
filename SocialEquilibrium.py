@@ -10,11 +10,12 @@ import matplotlib.pyplot as plt
 def main():
     # Control variables
     # temperatures = np.linspace(0.2, 0.3, 41, endpoint=True)  # List of temperatures to simulate
-    temperatures = [0.01]  # List of temperatures to simulate
+    # temperatures = [0.01, 0.1, 1.0, 10.0, 100.0]  # List of temperatures to simulate
+    temperatures = [1.0]  # List of temperatures to simulate
     mu = 0.0
     n_agents = 1000
-    delta = 0.01 / n_agents
-    final_time = 1000
+    delta = 0.01
+    final_time = 1000000
     n_realizations = 1  # Realizations per temperature value
     initial_rate = 0.0
     random_numbers_seed = 1
@@ -25,32 +26,36 @@ def main():
     check_control_variables(control_write_results, control_plot_results, len(temperatures) * n_realizations)
 
     # Iterate over temperatures and realizations
-    i = 0
+    i = 1
     for temperature in temperatures:
-        ts_collector = []
+        ts_collector_n_agents_up = []
+        ts_collector_profit_rate = []
         for realization in range(n_realizations):
 
             # Set seed for random number generator for this realization and temperature
             rand.seed(random_numbers_seed * i)
 
             # Run model
-            ts_n_agents_up, ts_rate = social_interaction_model(temperature, mu, n_agents, final_time, initial_rate,
-                                                               delta)
+            ts_n_agents_up, ts_rate = social_interaction_model_asynchronous(temperature, mu, n_agents, final_time,
+                                                                            initial_rate, delta)
 
             # If printing results to file, collect time series for a given temperature
             if control_write_results:
-                ts_collector.append(ts_n_agents_up)
+                ts_collector_n_agents_up.append(ts_n_agents_up)
+                ts_collector_profit_rate.append(ts_rate)
 
             # Plot results
             if control_plot_results:
-                plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature)
-                # plot_distribution(ts_rate, temperature)
+                # plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, delta, temperature)
+                plot_distribution(ts_rate, delta, temperature)
 
             i += 1
 
         # Print results to file
         if control_write_results:
-            write_results(temperature, ts_collector, "nAgentsUp")
+            # write_time_series(delta, temperature, ts_collector_n_agents_up, "nAgentsUp")
+            # write_time_series(delta, temperature, ts_collector_profit_rate, "profitRate")
+            write_distribution(delta, temperature, ts_collector_profit_rate, "profitRateDist")
 
     # So that plots are shown
     if control_plot_results:
@@ -86,51 +91,108 @@ def social_interaction_model(temperature, mu, n_agents, final_time, initial_rate
     return ts_n_agents_up, ts_rate
 
 
-def write_results(temperature, time_series_collector, file_name):
+def social_interaction_model_asynchronous(temperature, mu, n_agents, final_time, initial_rate, delta):
+    rate = initial_rate
+    ts_n_agents_up = []
+    ts_rate = []
+    # Compute initial state of the system (with exact expected number of agents in each state)
+    state = []
+    n_agents_up = 0
+    initial_probability_of_entry = 1 / (1 + np.exp((mu - initial_rate) / temperature))
+    for i in range(int(n_agents*initial_probability_of_entry)):
+        state.append(1)
+        n_agents_up += 1
+    for i in range(int(n_agents*initial_probability_of_entry), n_agents):
+        state.append(0)
+    # Store initial state in time series
+    ts_n_agents_up.append(n_agents_up)
+    ts_rate.append(rate)
+    # Store initial state as old state and set most recent equilibrium to None
+    old_n_agents_up = n_agents_up
+
+    # Start simulation
+    t = 1
+    while t <= final_time:
+        # Update the frequency of buying for a given agent (for now, all agents have the same frequency)
+        probability_of_entry = 1/(1 + np.exp((mu - rate) / temperature))
+        # Asynchronous update: only a randomly chosen agent updates its state in a given time step, thus the system is
+        # instantaneously aware of every individual change of state
+        i = rand.randint(0, n_agents - 1)
+        if rand.random() <= probability_of_entry:
+            if state[i] != 1:
+                state[i] = 1
+                n_agents_up += 1
+        else:
+            if state[i] != 0:
+                state[i] = 0
+                n_agents_up -= 1
+        # Store current state in time series
+        ts_n_agents_up.append(n_agents_up)
+        ts_rate.append(rate)
+        # Update the rate of profit for next time step
+        rate = rate - delta * (n_agents_up - old_n_agents_up)
+        old_n_agents_up = n_agents_up
+        t += 1
+    return ts_n_agents_up, ts_rate
+
+
+def write_time_series(delta, temperature, time_series_collector, file_name):
     """Prints results to file"""
-    with open("./Results/" + file_name + "-T{:.4f}.csv".format(temperature), 'w') as f:
+    with open("./Results/" + file_name + "-delta{:.4}-T{:.5f}.csv".format(delta, temperature), 'w') as f:
         for i, line in enumerate(zip(*time_series_collector)):
-            if i < len(time_series_collector[1]) - 1:
+            if i < len(time_series_collector[0]) - 1:
                 f.write("%s\n" % ", ".join([str(element) for element in line]))
             else:
                 f.write("%s" % ", ".join([str(element) for element in line]))
 
 
-def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, temperature):
+def write_distribution(delta, temperature, time_series, file_name):
+    """Prints results to file"""
+    with open("./Results/" + file_name + "-delta{:.4}-T{:.5f}.csv".format(delta, temperature), 'w') as f:
+        my_bins = np.linspace(-delta*100, delta*100, 200, endpoint=True)
+        densities, bins = np.histogram(time_series, bins=my_bins, density=True)
+        f.write("Lower bin edge, upper bin edge, density\n")
+        for lower_bin_edge, upper_bin_edge, density in zip(my_bins[:-1], my_bins[1:], densities):
+            f.write("{}, {}, {}\n".format(lower_bin_edge, upper_bin_edge, density))
+
+
+def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, delta, temperature):
     """Performs basic plotting of the time series of n_agents_up and the rate of profit"""
     # Create figure
     plt.figure(figsize=(6, 4.5), facecolor='white')
     # Plot number of agents up
-    plt.plot(range(final_time + 1), ts_n_agents_up, "o-b", label="n_agents_up")
+    plt.plot(range(final_time + 1), [x/n_agents for x in ts_n_agents_up], "o-b", label="n_agents_up")
     plt.xlim(0.0, final_time)
-    plt.ylim(0.0, n_agents)
-    plt.ylabel("nAgentsUp")
+    plt.ylim(0.0, 1.0)
+    plt.ylabel("Frequency of Action")
     plt.xlabel("Time")
-    plt.title("T = " + str(temperature))
+    plt.title(r"$\delta$ = {:.4f}, T = {:.4f}".format(delta, temperature))
     # Plot rate of profit
     ax1 = plt.gca()
     ax1.twinx()  # instantiate a second axes that shares the same x-axis
     plt.plot(range(final_time + 1), ts_rate, "^-r", label="rate")
     plt.xlim(0.0, final_time)
-    plt.ylim(-0.02, 0.02)
+    # plt.ylim(-0.05, 0.05)
     plt.ylabel("Rate of profit")
     plt.tight_layout()
     plt.draw()
 
 
-def plot_distribution(ts_rate, temperature):
+def plot_distribution(ts_rate, delta, temperature):
     """Performs basic plotting of the distribution of the rate of profit"""
     # Create figure
-    plt.figure(figsize=(8, 6), facecolor='white')
+    plt.figure(figsize=(6, 4.5), facecolor='white')
     # Plot histogram of the rate of profit
-    my_bins = np.linspace(-0.1, 0.1, 101, endpoint=True)
+    my_bins = np.linspace(-delta * 100, delta * 100, 200, endpoint=True)
     plt.hist(ts_rate, bins=my_bins, density=True)
-    plt.xlim(-0.1, 0.1)
+    plt.xlim(-delta * 100, delta * 100)
     plt.ylabel("Probability density")
     plt.xlabel("Rate of profit")
-    plt.title("T = " + str(temperature))
+    plt.title(r"$\delta$ = {:.4f}, T = {:.4f}".format(delta, temperature))
     plt.tight_layout()
     plt.draw()
+    plt.savefig("./RateDistribution-delta{:.4f}-T{:.4f}.pdf".format(delta, temperature), format="pdf", dpi=300,
+                bbox_inches='tight')
 
 
 def check_control_variables(control_write_results, control_plot_results, number_of_plots):
