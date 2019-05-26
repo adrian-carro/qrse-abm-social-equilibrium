@@ -9,19 +9,20 @@ import matplotlib.pyplot as plt
 
 def main():
     # Control variables
-    # temperatures = np.linspace(0.2, 0.3, 41, endpoint=True)
-    # temperatures = [0.01, 0.1, 1.0, 10.0, 100.0]
+    # temperatures1 = [0.01, 0.1, 1.0, 10.0, 100.0]  # List of temperatures to simulate for the first type of agent
+    # temperatures2 = [0.01, 0.1, 1.0, 10.0, 100.0]  # List of temperatures to simulate for the second type of agent
     temperatures1 = [1.0]  # List of temperatures to simulate for the first type of agent
     temperatures2 = [1.0]  # List of temperatures to simulate for the second type of agent
     fraction_of_agent1 = 0.5
     mu = 0.0
     n_agents = 1000
     delta = 0.01
-    final_time = 10000
+    final_time = 10000000
+    # final_time = 10000
     initial_rate = 0.0
     random_numbers_seed = 1
-    control_write_results = False
-    control_plot_results = True
+    control_write_results = True
+    control_plot_results = False
 
     # Confirm large number of plots with user
     check_control_variables(control_write_results, control_plot_results, len(temperatures1))
@@ -40,9 +41,9 @@ def main():
 
         # Plot results
         if control_plot_results:
-            # plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate[0], delta, temperature1, temperature2,
-            #                  fraction_of_agent1)
-            plot_distribution(ts_rate, delta, temperature1, temperature2)
+            plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate[0], delta, temperature1, temperature2,
+                             fraction_of_agent1)
+            # plot_distribution(ts_rate, delta, temperature1, temperature2)
 
         i += 1
 
@@ -50,7 +51,8 @@ def main():
         if control_write_results:
             # write_time_series(delta, temperature1, temperature2, ts_n_agents_up, "nAgentsUp")
             # write_time_series(delta, temperature1, temperature2, ts_rate, "profitRate")
-            write_distribution(delta, temperature1, temperature2, ts_rate[0], "profitRateDist")
+            write_distribution(delta, temperature1, temperature2, ts_rate[0], ts_n_agents_up, n_agents,
+                               fraction_of_agent1, "profitRateDist")
 
     # So that plots are shown
     if control_plot_results:
@@ -151,7 +153,7 @@ def social_interaction_model_asynchronous(temperature1, temperature2, fraction_o
 
 def write_time_series(delta, temperature1, temperature2, time_series, file_name):
     """Prints results to file"""
-    with open("./Results/" + file_name + "-delta{:.4}-T{:.4f}-T{:.4f}.csv".format(delta, temperature1, temperature2),
+    with open("./Results/" + file_name + "-delta{:.4f}-T{:.4f}-T{:.4f}.csv".format(delta, temperature1, temperature2),
               "w") as f:
         for i, line in enumerate(zip(*time_series)):
             if i < len(time_series[0]) - 1:
@@ -160,15 +162,28 @@ def write_time_series(delta, temperature1, temperature2, time_series, file_name)
                 f.write("%s" % ", ".join([str(element) for element in line]))
 
 
-def write_distribution(delta, temperature1, temperature2, time_series, file_name):
-    """Prints results to file"""
-    with open("./Results/" + file_name + "-delta{:.4}-T{:.4f}-T{:.4f}.csv".format(delta, temperature1, temperature2),
+def write_distribution(delta, temperature1, temperature2, time_series_rate, time_series_n_agents_up, n_agents,
+                       fraction_of_agent1, file_name):
+    """Prints rate distribution results to file for the aggregate rate and the average rate for each type of agent"""
+    # First create the aggregate, general histogram
+    my_bins = np.linspace(-delta * 100, delta * 100, 200, endpoint=True)
+    densities, bins = np.histogram(time_series_rate, bins=my_bins, density=True)
+    # First create a time series of average rate for agents of type 1, and a histogram of this average
+    time_series_rate1 = []
+    for rate, n_agents_up1 in zip(time_series_rate, time_series_n_agents_up[0]):
+        time_series_rate1.append(rate * n_agents_up1 / (n_agents * fraction_of_agent1))
+    densities1, bins1 = np.histogram(time_series_rate1, bins=my_bins, density=True)
+    time_series_rate2 = []
+    for rate, n_agents_up2 in zip(time_series_rate, time_series_n_agents_up[1]):
+        time_series_rate2.append(rate * n_agents_up2 / (n_agents * (1 - fraction_of_agent1)))
+    densities2, bins2 = np.histogram(time_series_rate2, bins=my_bins, density=True)
+    # Then print to file all three distributions, with the same bins
+    with open("./Results/" + file_name + "-delta{:.4f}-T{:.4f}-T{:.4f}.csv".format(delta, temperature1, temperature2),
               "w") as f:
-        my_bins = np.linspace(-delta*100, delta*100, 200, endpoint=True)
-        densities, bins = np.histogram(time_series, bins=my_bins, density=True)
-        f.write("Lower bin edge, upper bin edge, density\n")
-        for lower_bin_edge, upper_bin_edge, density in zip(my_bins[:-1], my_bins[1:], densities):
-            f.write("{}, {}, {}\n".format(lower_bin_edge, upper_bin_edge, density))
+        f.write("Lower bin edge, upper bin edge, density, density1, density2\n")
+        for lower_bin_edge, upper_bin_edge, density, density1, density2 in zip(my_bins[:-1], my_bins[1:], densities,
+                                                                               densities1, densities2):
+            f.write("{}, {}, {}, {}, {}\n".format(lower_bin_edge, upper_bin_edge, density, density1, density2))
 
 
 def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, delta, temperature1, temperature2,
@@ -177,9 +192,9 @@ def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, delta, tempe
     # Create figure
     plt.figure(figsize=(6, 4.5), facecolor='white')
     # Plot number of agents up
-    plt.plot(range(final_time + 1), [x / (n_agents * fraction_of_agents1) for x in ts_n_agents_up[0]], "o-b",
+    plt.plot(range(final_time + 1), [x / (n_agents * fraction_of_agents1) for x in ts_n_agents_up[0]], "-b",
              label="n_agents_up1")
-    plt.plot(range(final_time + 1), [x / (n_agents * fraction_of_agents1) for x in ts_n_agents_up[1]], "o-g",
+    plt.plot(range(final_time + 1), [x / (n_agents * (1 - fraction_of_agents1)) for x in ts_n_agents_up[1]], "-g",
              label="n_agents_up2")
     plt.xlim(0.0, final_time)
     plt.ylim(0.0, 1.0)
@@ -190,13 +205,15 @@ def plot_time_series(final_time, n_agents, ts_n_agents_up, ts_rate, delta, tempe
     # Plot rate of profit
     ax1 = plt.gca()
     ax1.twinx()  # instantiate a second axes that shares the same x-axis
-    plt.plot(range(final_time + 1), ts_rate, "^-r", label="rate")
+    plt.plot(range(final_time + 1), ts_rate, "-r", label="rate")
     plt.axhline(y=0, ls="--", c="k", lw=2)
     plt.xlim(0.0, final_time)
     plt.ylim(-delta * 100, delta * 100)
     plt.ylabel("Rate of profit")
     plt.tight_layout()
     plt.draw()
+    # plt.savefig("./RateTimeSeries-delta{:.4f}-T{:.4f}-T{:.4f}.pdf".format(delta, temperature1, temperature2),
+    #             format="pdf", dpi=300, bbox_inches='tight')
 
 
 def plot_distribution(ts_rate, delta, temperature1, temperature2):
